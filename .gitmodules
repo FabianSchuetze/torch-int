@@ -2,3 +2,6 @@
 	path = submodules/cutlass
 	url = git@github.com:NVIDIA/cutlass.git
 	ignore = dirty
+[submodule "submodules/pybind11"]
+	path = submodules/pybind11
+	url = https://github.com/pybind/pybind11.git

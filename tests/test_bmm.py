@@ -1,31 +1,65 @@
 import torch
-from torch_int._CUDA import bmm_s8t_s8n_s8t, bmm_s8t_s8n_s32t, bmm_s8t_s8n_f32t
+from torch_int._CUDA import (
+        bmm_s8t_s8n_s8t,
+        bmm_s8t_s8n_s32t,
+        bmm_s8t_s8n_f32t,
+        bmm_f32t_f32n_f32t)
 from icecream import ic
 
+# @torch.no_grad()
+# def test_bmm_s8t_s8n_s8t():
+    # # used by attn_prob x value
+    # # B, M, K, N = 1, 512, 512, 32
+    # B, M, N, K =  300, 196, 196, 64 #not divisible by 32! a sin...
+    # # a = torch.randint(-128, 127, (B, M, N), dtype=torch.int8, device='cuda')
+    # # breakpoint()
+    # # a = torch.softmax(a, dim=2)
+    # # b = torch.randint(-128, 127, (B, N, K), dtype=torch.int8, device='cuda')
+    # a = torch.load('/tmp/attn.pt')
+    # b = torch.load('/tmp/v.pt')
+    # anew = torch.zeros((
+    # # assert a.shape == a2.shape
+    # # assert b.shape == b2.shape
+    # breakpoint()
+    # scale = 0.001
+    # # c = bmm_s8t_s8n_s8t(b.transpose(-2, -1).contiguous(), a.transpose(-2, -1), scale).transpose(-2, -1)
+    # c = bmm_f32t_f32n_f32t(b.float().transpose(-2, -1).contiguous(), a.float().transpose(-2, -1),scale).transpose(-2, -1)
+    # c_gt = torch.bmm(a.float(), b.float().transpose(1,2)) * scale
+    # c_gt = c_gt.clamp(-128, 127).round().to(torch.int8)
+    # ic(torch.allclose(c_gt, c.cpu()))
 
 @torch.no_grad()
 def test_bmm_s8t_s8n_s8t():
     # used by attn_prob x value
-    B, M, K, N = 1, 512, 512, 32
-    a = torch.randint(-128, 127, (B, M, K), dtype=torch.int8)
-    b = torch.randint(-128, 127, (B, N, K), dtype=torch.int8)
+    B, M, K, N = 300, 196, 64, 196
+    a1 = torch.randint(-128, 127, (B, M, N), dtype=torch.int8)
+    b1 = torch.randint(-128, 127, (B, N, K), dtype=torch.int8)
+    anew = torch.zeros((B, K, 224), dtype=torch.int8)
+    bnew = torch.zeros((B, 224, 224), dtype=torch.int8)
+    anew[:, :, :196] = b1.transpose(-2, -1).contiguous()
+    bnew[:, :196, :196] = a1
     scale = 0.001
-    c = bmm_s8t_s8n_s8t(a.cuda(), b.cuda(), scale)
-    c_gt = torch.bmm(a.float(), b.float().transpose(1, 2)) * scale
+    c1 = bmm_s8t_s8n_s8t(anew.cuda(), bnew.transpose(-2, -1).cuda(), scale).transpose(-1, -2)[:, :196, :]
+    # c2 = bmm_s8t_s8n_s8t(anew.cuda(), bnew.cuda(), scale)
+    c_gt = torch.bmm(a1.float(), b1.float()) * scale
     c_gt = c_gt.clamp(-128, 127).round().to(torch.int8)
-    ic(torch.allclose(c_gt, c.cpu()))
+    ic(torch.allclose(c_gt, c1.cpu()))
 
 
 @torch.no_grad()
 def test_bmm_s8t_s8n_f32t():
+    breakpoint()
     # used by attn_prob x value
-    B, M, K, N = 1, 512, 512, 32
+    # B, M, K, N = 1, 512, 512, 32
+    B, M, K, N = 400, 196, 64, 196
     a = torch.randint(-128, 127, (B, M, K), dtype=torch.int8).cuda()
     b = torch.randint(-128, 127, (B, N, K), dtype=torch.int8).cuda()
+    bnew = torch.zeros((B, 224, 64), device='cuda', dtype=torch.int8)
+    bnew[:, :196, :] = b
     scale = 0.001
-    c = bmm_s8t_s8n_f32t(a, b, scale)
+    c = bmm_s8t_s8n_f32t(a, bnew, scale)
     # ic(c)
-    c_gt = torch.bmm(a.float(), b.float().transpose(1, 2)) * scale
+    c_gt = torch.bmm(a.float(), b.transpose(-2, -1).float()) * scale
     # ic(c_gt)
     ic(torch.mean((c_gt - c) ** 2))
 
@@ -106,6 +140,61 @@ def test_bmm_s8t_s8n_s8t_2():
     ic(torch.mean((c_gt.float() - c1.float()) ** 2))
 
 
+@torch.no_grad()
+def test_bmm_f32t_f32n_f32t():
+    B, M, K, N = 300, 196, 64, 196
+    a = torch.load('/tmp/q.pt')
+    b = torch.load('/tmp/k.pt')
+    assert a.size(0) == B
+    assert a.size(1) == M
+    assert a.size(2) == K
+    assert b.size(1) == N
+    scale = 0.125
+    c_gt = torch.bmm(a * scale, b.transpose(-2, -1))
+    c = bmm_f32t_f32n_f32t(a, b,scale)
+    r2 = ((c_gt - c)**2).mean() / (c_gt**2).mean()
+    ic(r2)
+
+@torch.no_grad()
+def test_bmm_f32t_f32n_f32t():
+    # breakpoint()
+    B, M, K, N = 300, 196, 64, 196
+    a = torch.load('/tmp/q.pt')
+    b = torch.load('/tmp/k.pt')
+    assert a.size(0) == B
+    assert a.size(1) == M
+    assert a.size(2) == K
+    assert b.size(1) == N
+    scale = 0.125
+    c_gt = torch.bmm(a * scale, b.transpose(-2, -1))
+    c = bmm_f32t_f32n_f32t(a, b,scale)
+    r2 = ((c_gt - c)**2).mean() / (c_gt**2).mean()
+    ic(r2)
+
+# @torch.no_grad()
+def test_bmm_f32t_f32n_f32t_attn():
+    B, M, K, N = 300, 196, 196,  64
+    a = torch.load('/tmp/attn.pt')
+    b = torch.load('/tmp/v.pt')
+    # a= torch.rand(a.shape, device=a.device)
+    # b= torch.rand(b.shape, device=b.device)
+    assert a.size(0) == B
+    assert a.size(1) == M
+    assert a.size(2) == K
+    assert b.size(2) == N
+    scale = 1.0
+    c_gt = torch.bmm(a * scale, b)
+    c = bmm_f32t_f32n_f32t(b.transpose(-2, -1).contiguous(), a.transpose(-2, -1),scale).transpose(-2, -1)
+    r2 = ((c_gt - c)**2).mean() / (c_gt**2).mean()
+    ic(r2)
+
+#(Pdb) print(a.shape)
+#torch.Size([300, 196, 196])
+#(Pdb) print(b.shape)
+#torch.Size([300, 196, 64])
+
+
+
 # (A_row V_row)_row ^ T = (V_row ^T A_row ^T)_row = (V^T_row A_col)_row
 # (A_row V_row)_row = (A_row V_col ^T)_row
 @torch.no_grad()
@@ -123,9 +212,13 @@ def test_bmm_s8t_s8n_s32t():
 if __name__ == '__main__':
     print('test_bmm_s8t_s8n_s8t')
     test_bmm_s8t_s8n_s8t()
-    print('test_bmm_s8t_s8n_s8t_2')
-    test_bmm_s8t_s8n_s8t_2()
-    print('test_bmm_s8t_s8n_s32t')
-    test_bmm_s8t_s8n_s32t()
+    # print('test_bmm_s8t_s8n_s8t_2')
+    # test_bmm_s8t_s8n_s8t_2()
+    # print('test_bmm_s8t_s8n_s32t')
+    # test_bmm_s8t_s8n_s32t()
     print('test_bmm_s8t_s8n_f32t')
     test_bmm_s8t_s8n_f32t()
+    # print('test_bmm_f32t_f32n_f32t')
+    # test_bmm_f32t_f32n_f32t()
+    # print('test_bmm_f32t_f32n_f32t_attn')
+    # test_bmm_f32t_f32n_f32t_attn()

@@ -6,6 +6,7 @@ class LayerNormQ(torch.nn.Module):
     def __init__(self, dim, eps=1e-5):
         super().__init__()
         self.input_scale = 1.0
+        self.output_scale = 1.0
         self.eps = eps
         self.register_buffer('weight', torch.ones(dim, dtype=torch.float32))
         self.register_buffer('bias', torch.zeros(dim, dtype=torch.float32))
@@ -17,11 +18,14 @@ class LayerNormQ(torch.nn.Module):
         ln_output_int8 = ln_output_fp.round().clamp(-128, 127).to(torch.int8)
         return ln_output_int8
 
+# [ 1.2714,  0.1928, -0.0987,  ...,  2.1973,  0.3150,  0.1223]]]
+    #output_scale = 0.0457
     @staticmethod
     def from_float(module: torch.nn.LayerNorm, output_scale: float):
         assert module.normalized_shape[0] == module.weight.numel()
         assert module.normalized_shape[0] == module.bias.numel()
         q_module = LayerNormQ(module.normalized_shape[0], module.eps)
+        q_module.output_scale = output_scale
         q_module.weight = module.weight / output_scale
         q_module.bias = module.bias / output_scale
         return q_module
