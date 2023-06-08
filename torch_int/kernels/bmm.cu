@@ -67,7 +67,7 @@ torch::Tensor bmm_s8t_s8n_f32t(torch::Tensor A, torch::Tensor B, float alpha) {
   // Check the problem size is supported or not
   cutlass::Status status = gemm_op.can_implement(arguments);
   if (status != cutlass::Status::kSuccess) {
-    throw std::runtime_error("cutlass cannot implement");
+    throw std::runtime_error(cutlass::cutlassGetStatusString(status));
   }
 
   // Initialize CUTLASS kernel with arguments and workspace pointer
