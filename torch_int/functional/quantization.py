@@ -9,8 +9,8 @@ def quantize_per_tensor_absmax(t):
         # half rounding is not supported on CPU
         t = t.float()
     # use inplace operation to save memory
-    t.div_(scale).round_()
-    t_q = t.to(torch.int8)
+    tnew = t.div(scale).round()
+    t_q = tnew.to(torch.int8)
     return t_q, scale
 
 @torch.no_grad()

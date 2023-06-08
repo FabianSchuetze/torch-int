@@ -237,7 +237,7 @@ class W8A8BFP32OFP32Linear(torch.nn.Module):
         self.register_buffer('weight', torch.randint(-127, 127, (self.out_features,
                                                                  self.in_features), dtype=torch.int8, requires_grad=False))
         self.register_buffer('bias', torch.zeros(
-            (1, self.out_features), dtype=torch.float32, requires_grad=False))
+            (self.out_features), dtype=torch.float32, requires_grad=False))
         self.register_buffer('a', torch.tensor(alpha))
 
     def _apply(self, fn):
